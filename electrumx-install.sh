@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Electrum Server Setup Script for Debian
-# Configures Electrum server with Let's Encrypt SSL, using an existing Bitcoin node
-# Accepts connections on port 443
+# Electrum Server Setup Script for Debian (Updated for Virtual Environment)
+# Configures ElectrumX with Let's Encrypt SSL, using an existing Bitcoin node
+# Accepts connections on port 443, avoids externally-managed-environment error
 
 # Exit on error
 set -e
@@ -37,7 +37,18 @@ apt-get update
 
 # Install required dependencies
 echo "Installing dependencies..."
-apt-get install -y python3 python3-pip python3-dev build-essential libssl-dev certbot python3-certbot-nginx git
+apt-get install -y python3 python3-pip python3-dev python3-venv build-essential libssl-dev certbot python3-certbot-nginx git
+
+# Create and activate virtual environment for ElectrumX
+echo "Creating virtual environment for ElectrumX..."
+mkdir -p /opt/electrumx
+python3 -m venv /opt/electrumx/venv
+source /opt/electrumx/venv/bin/activate
+
+# Install ElectrumX in the virtual environment
+echo "Installing ElectrumX in virtual environment..."
+pip3 install --no-cache-dir electrumx
+deactivate
 
 # Prompt for public DNS name
 prompt_for_input "Enter your public DNS name (e.g., electrum.example.com): " PUBLIC_DNS
@@ -49,10 +60,6 @@ prompt_for_input "Enter Bitcoin RPC host (default: 127.0.0.1): " BITCOIN_RPC_HOS
 BITCOIN_RPC_HOST=${BITCOIN_RPC_HOST:-127.0.0.1}
 prompt_for_input "Enter Bitcoin RPC port (default: 8332): " BITCOIN_RPC_PORT
 BITCOIN_RPC_PORT=${BITCOIN_RPC_PORT:-8332}
-
-# Install Electrum Server (ElectrumX)
-echo "Installing ElectrumX..."
-pip3 install electrumx
 
 # Create ElectrumX configuration directory
 mkdir -p /etc/electrumx
@@ -75,6 +82,7 @@ PEER_ANNOUNCE = on
 REQUEST_TIMEOUT = 30
 MAX_SESSIONS = 20000
 MAX_SEND=10000000
+CACHE_MB=3000
 LOG_LEVEL = info
 EOL
 
@@ -82,6 +90,7 @@ EOL
 mkdir -p /var/lib/electrumx
 useradd -m -s /bin/false electrumx || echo "User electrumx already exists."
 chown -R electrumx:electrumx /var/lib/electrumx
+chown -R electrumx:electrumx /opt/electrumx
 chmod 750 /var/lib/electrumx
 
 # Install Nginx for Let's Encrypt validation
@@ -107,7 +116,7 @@ After=network.target
 [Service]
 User=electrumx
 Group=electrumx
-ExecStart=/usr/local/bin/electrumx_server
+ExecStart=/opt/electrumx/venv/bin/electrumx_server
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/etc/electrumx/electrumx.conf
 WorkingDirectory=/var/lib/electrumx
